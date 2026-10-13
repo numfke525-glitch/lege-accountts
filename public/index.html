@@ -1,9 +1,668 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LedgerLens AI — Accounting Solver</title><style>:root{font-family:Inter,system-ui,Arial;background:#f5f7fb;color:#172238}*{box-sizing:border-box}body{margin:0}.top{background:#101b34;color:white;padding:18px 5%;display:flex;align-items:center;justify-content:space-between}.top b{font-size:23px}.top span{color:#a9b7d4;font-size:12px}.wrap{max-width:920px;margin:25px auto;padding:0 15px}h1{font-size:clamp(25px,5vw,39px);margin:12px 0}p{color:#64748b;line-height:1.5}.panel{background:white;border:1px solid #e1e7f1;border-radius:19px;padding:23px;margin:18px 0;box-shadow:0 5px 20px #13254b0a}.drop{border:2px dashed #93a9cf;border-radius:16px;padding:30px;text-align:center;background:#f8fbff;cursor:pointer;display:block}.drop strong{display:block;font-size:20px;margin:8px}.drop input{display:none}button{border:0;background:#2659e8;color:white;border-radius:11px;padding:13px 20px;font-size:15px;font-weight:700;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.muted{background:#eaf0ff;color:#2349aa}.ghost{background:#edf0f5;color:#28364d}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.hidden{display:none!important}.preview{max-width:100%;max-height:260px;border-radius:12px;margin-top:12px}.steps{display:flex;gap:8px;flex-wrap:wrap;margin:17px 0}.steps span{background:#e7edf7;color:#53637d;border-radius:30px;padding:9px 12px;font-size:12px;font-weight:700}.steps .active{background:#dfe9ff;color:#2052d8}.tx{border:1px solid #e4e9f2;border-radius:12px;padding:12px;margin:10px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}label{font-size:12px;color:#64748b;font-weight:700;display:block;margin:7px 0}input,textarea{font:inherit;width:100%;padding:10px;border:1px solid #cdd7e7;border-radius:9px;background:white;color:#1c2b42}textarea{min-height:65px;resize:vertical}.alert{background:#fff6dd;border:1px solid #f3d58b;border-radius:10px;padding:12px;color:#755300;margin:10px 0}.error{background:#ffe9e9;color:#a02020;padding:12px;border-radius:10px}.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px;min-width:510px}td,th{border:1px solid #d9e1ec;padding:10px;text-align:left}th{background:#eff4ff}td.num{text-align:right;font-variant-numeric:tabular-nums}.account{display:inline-block;border:1px solid #d6dfec;border-radius:12px;padding:13px;vertical-align:top;margin:6px;width:min(100%,280px)}.account h4{text-align:center;margin:0 0 9px}.account .sides{display:grid;grid-template-columns:1fr 1fr;gap:10px}.account .sides>div:first-child{border-right:1px solid #cbd5e1}.account small{display:block;margin:6px 0}footer{text-align:center;color:#8090a9;padding:30px}@media print{.top,.steps,.actions,#uploadPanel,#confirmPanel,.intro{display:none!important}.panel{box-shadow:none;border:0;padding:0}body{background:white}}@media(max-width:600px){.panel{padding:16px}.grid{grid-template-columns:1fr}}</style></head><body><header class="top"><b>◈ LedgerLens <span>AI</span></b><span>Accounting Question Solver</span></header><main class="wrap"><div class="intro"><h1>Upload a question. Get the complete solution.</h1><p>Photo upload karo → AI question read karega → amounts confirm karo → journal, T-accounts aur trial balance pao.</p></div><div class="steps"><span id="s1" class="active">1 · Upload</span><span id="s2">2 · Confirm</span><span id="s3">3 · Solution</span></div><section class="panel" id="uploadPanel"><h2>📷 Upload your accounting question</h2><label class="drop">📸<strong>Tap to choose a photo</strong><span>Camera / Gallery · JPG, PNG, WebP · Max 3 MB (Netlify limit)</span><input id="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label><div class="actions"><button type="button" class="muted" id="gallery">Choose from gallery</button></div><img id="preview" class="preview hidden" alt="Uploaded question"><div class="actions"><button id="analyze" disabled>Analyze Full Question →</button></div><p id="status" role="status"></p></section><section class="panel hidden" id="confirmPanel"><h2>🔍 Confirm your question</h2><p>AI ne jo read kiya hai use check karo. Dates, values, names aur descriptions edit kar sakte ho.</p><label>Business / Person</label><input id="business"><label>Period</label><input id="period"><label>Full question / heading</label><textarea id="question"></textarea><label>Required tasks (one per line)</label><textarea id="requirements"></textarea><h3>Transactions & values</h3><div id="transactions"></div><button class="muted" id="add">+ Add transaction</button><div id="warnings"></div><div class="actions"><button id="solve">Yes, question is correct — Solve →</button><button class="ghost" id="back">← Change Photo</button></div><p id="solveStatus" role="status"></p></section><section class="panel hidden" id="resultPanel"><h2>✅ Complete Accounting Solution</h2><p id="resultTitle"></p><div id="solution"></div><div class="actions"><button onclick="window.print()">Print / Save PDF</button><button class="muted" id="new">Solve another question</button></div></section></main><footer>LedgerLens AI · Always verify unclear text and accounting assumptions</footer><script>
-let extracted=null;const $=id=>document.getElementById(id);const money=n=>Number(n||0).toLocaleString('en-PK',{maximumFractionDigits:2});const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const show=id=>{['uploadPanel','confirmPanel','resultPanel'].forEach(x=>$(x).classList.toggle('hidden',x!==id));['s1','s2','s3'].forEach((x,i)=>$(x).classList.toggle('active',['uploadPanel','confirmPanel','resultPanel'][i]===id))};$('gallery').onclick=()=>{const x=$('photo');x.removeAttribute('capture');x.click()};$('photo').onchange=()=>{let f=$('photo').files[0];$('analyze').disabled=!f || f.size>3*1024*1024;if(f && f.size>3*1024*1024){$('status').textContent='Photo too large. Please choose an image under 3 MB.';}else{$('status').textContent='';}if(f){$('preview').src=URL.createObjectURL(f);$('preview').classList.remove('hidden')}};
-async function api(url,body,file=false){let r=await fetch(url,{method:'POST',body:file?body:JSON.stringify(body),headers:file?{}:{'Content-Type':'application/json'}});let j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j}
-$('analyze').onclick=async()=>{const f=$('photo').files[0];if(!f)return;let fd=new FormData();fd.append('image',f);$('analyze').disabled=true;$('status').textContent='AI is reading every date, amount and transaction…';try{const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('Cannot read photo'));reader.readAsDataURL(f)});extracted=await api('/api/analyze',{image:encoded,mimeType:f.type});$('business').value=extracted.business||'';$('period').value=extracted.period||'';$('question').value=extracted.question||'';$('requirements').value=(extracted.requirements||[]).join('\n');renderTx();$('warnings').innerHTML=(extracted.warnings||[]).map(x=>`<div class="alert">⚠ ${safe(x)}</div>`).join('');show('confirmPanel')}catch(e){$('status').innerHTML=`<span class="error">${safe(e.message)}</span>`}finally{$('analyze').disabled=false}};
-function renderTx(){const root=$('transactions');root.innerHTML='';(extracted.transactions||[]).forEach((t,i)=>{const d=document.createElement('div');d.className='tx';d.innerHTML=`<b>Transaction ${i+1} ${t.uncertain?'⚠ Check carefully':''}</b><div class="grid"><div><label>Date</label><input data-field="date" value="${safe(t.date)}"></div><div><label>Amounts (comma-separated)</label><input data-field="amounts" value="${safe((t.amounts||[]).join(', '))}"></div></div><label>Full transaction description</label><textarea data-field="description">${safe(t.description)}</textarea><label>People / Businesses (comma-separated)</label><input data-field="parties" value="${safe((t.parties||[]).join(', '))}"><div class="actions"><button class="ghost remove" type="button">Remove</button></div>`;d.querySelector('.remove').onclick=()=>{readTx();extracted.transactions.splice(i,1);renderTx()};root.appendChild(d)})}
-function readTx(){extracted.transactions=[...$('transactions').children].map(d=>({date:d.querySelector('[data-field=date]').value,description:d.querySelector('[data-field=description]').value,amounts:d.querySelector('[data-field=amounts]').value.split(',').map(x=>Number(x.trim())).filter(x=>Number.isFinite(x)&&x>0),parties:d.querySelector('[data-field=parties]').value.split(',').map(x=>x.trim()).filter(Boolean)}))}
-$('add').onclick=()=>{readTx();extracted.transactions.push({date:'',description:'',amounts:[],parties:[]});renderTx()};$('back').onclick=()=>show('uploadPanel');$('new').onclick=()=>{location.reload()};$('solve').onclick=async()=>{readTx();let data={business:$('business').value,period:$('period').value,question:$('question').value,requirements:$('requirements').value.split('\n').filter(Boolean),transactions:extracted.transactions};$('solve').disabled=true;$('solveStatus').textContent='Generating journal entries, ledger, T-accounts and trial balance…';try{let r=await api('/api/solve',data);$('resultTitle').textContent=`${data.business} · ${data.period}`;renderSolution(r);show('resultPanel')}catch(e){$('solveStatus').innerHTML=`<span class="error">${safe(e.message)}</span>`}finally{$('solve').disabled=false}};
-function renderSolution(r){let entries=[...(r.journal||[]).map(x=>({date:x.date,lines:[{account:x.debitAccount,debit:x.debit,credit:0},{account:x.creditAccount,debit:0,credit:x.credit}],narration:x.narration,explanation:x.explanation})),...(r.extraEntries||[])];let html='<h3>General Journal</h3><div class="tablewrap"><table><tr><th>Date</th><th>Particulars / Narration</th><th>Debit (Rs.)</th><th>Credit (Rs.)</th></tr>';let dr=0,cr=0;for(let e of entries){(e.lines||[]).forEach((l,i)=>{dr+=Number(l.debit||0);cr+=Number(l.credit||0);html+=`<tr><td>${i?'':safe(e.date)}</td><td>${l.credit?'&nbsp;&nbsp;To ':''}${safe(l.account)}</td><td class="num">${l.debit?money(l.debit):''}</td><td class="num">${l.credit?money(l.credit):''}</td></tr>`});html+=`<tr><td></td><td colspan="3"><i>${safe(e.narration||'')}</i> ${safe(e.explanation||'')}</td></tr>`}html+=`<tr><th></th><th>Total</th><th>${money(dr)}</th><th>${money(cr)}</th></tr></table></div>`;if(Math.abs(dr-cr)>.01)html+='<div class="alert">⚠ Journal debits and credits do not balance. Review before using.</div>';html+='<h3>T-Accounts</h3>';for(let t of r.tAccounts||[]){html+=`<div class="account"><h4>${safe(t.account)}</h4><div class="sides"><div><b>Dr.</b>${(t.debits||[]).map(x=>`<small>${safe(x.date)} · ${money(x.amount)}</small>`).join('')}</div><div><b>Cr.</b>${(t.credits||[]).map(x=>`<small>${safe(x.date)} · ${money(x.amount)}</small>`).join('')}</div></div><hr><small>Balance: ${money(t.balance)} ${safe(t.side||'')}</small></div>`}html+='<h3>Trial Balance</h3><div class="tablewrap"><table><tr><th>Account</th><th>Debit (Rs.)</th><th>Credit (Rs.)</th></tr>';let td=0,tc=0;for(let t of r.trialBalance||[]){td+=Number(t.debit||0);tc+=Number(t.credit||0);html+=`<tr><td>${safe(t.account)}</td><td class="num">${t.debit?money(t.debit):''}</td><td class="num">${t.credit?money(t.credit):''}</td></tr>`}html+=`<tr><th>Total</th><th>${money(td)}</th><th>${money(tc)}</th></tr></table></div>`;if(Math.abs(td-tc)>.01)html+='<div class="alert">⚠ Trial balance mismatch — check entries.</div>';for(let n of [...(r.notes||[]),...(r.warnings||[])])html+=`<div class="alert">${safe(n)}</div>`;$('solution').innerHTML=html}
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LedgerLens AI — Smart Accounting Solver</title>
+  <meta name="description" content="Upload an accounting question image, confirm extracted transactions, and generate a complete accounting solution with journal, T-accounts and trial balance." />
+  <style>
+    :root{
+      --bg:#07111f;
+      --bg2:#0b1730;
+      --panel:rgba(13,24,48,.75);
+      --panel-solid:#0f1c35;
+      --card:#101f3d;
+      --card-soft:#13274b;
+      --line:rgba(148,163,184,.18);
+      --text:#eff6ff;
+      --muted:#9fb2cb;
+      --blue:#4e86ff;
+      --blue2:#1b5cff;
+      --cyan:#45d8ff;
+      --green:#36d399;
+      --amber:#ffca6a;
+      --danger:#ff7c88;
+      --shadow:0 18px 60px rgba(0,0,0,.35);
+      --radius:24px;
+      --radius2:18px;
+      --radius3:14px;
+      --font:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      font-family:var(--font);
+      color:var(--text);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(69,216,255,.16), transparent 25%),
+        radial-gradient(circle at 90% 8%, rgba(78,134,255,.18), transparent 28%),
+        radial-gradient(circle at 50% 100%, rgba(54,211,153,.12), transparent 25%),
+        linear-gradient(180deg, #081222 0%, #06101d 100%);
+      min-height:100vh;
+    }
+    a{color:inherit}
+    img{max-width:100%}
+    .shell{max-width:1240px;margin:0 auto;padding:0 18px 40px}
+    .topbar{
+      position:sticky;top:0;z-index:40;
+      backdrop-filter:blur(18px);
+      background:rgba(4,10,22,.66);
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .topbar-inner{
+      max-width:1240px;margin:0 auto;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:18px;
+    }
+    .brand{display:flex;align-items:center;gap:14px}
+    .logo{
+      width:48px;height:48px;border-radius:16px;
+      background:linear-gradient(145deg,#59d8ff,#245dff 58%,#1439aa);
+      display:grid;place-items:center;box-shadow:0 16px 30px rgba(27,92,255,.35), inset 0 2px 8px rgba(255,255,255,.28);
+      font-weight:900;font-size:22px;color:white;
+      transform:translateZ(0);
+    }
+    .brand-text b{display:block;font-size:1.08rem;letter-spacing:.3px}
+    .brand-text span{display:block;color:var(--muted);font-size:.86rem;margin-top:2px}
+    .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .pill{
+      padding:10px 14px;border:1px solid rgba(255,255,255,.08);border-radius:999px;
+      background:rgba(255,255,255,.04);color:#d9e7ff;font-size:.84rem;font-weight:700;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .pill.live::before,.status-ok::before{content:"";display:inline-block;width:9px;height:9px;border-radius:99px;background:#34d399;margin-right:8px;box-shadow:0 0 0 4px rgba(52,211,153,.18)}
+    .hero{padding:42px 0 24px;display:grid;grid-template-columns:1.2fr .8fr;gap:24px;align-items:stretch}
+    .hero-card,.mini-panel,.stage,.summary-card,.result-shell,.workflow-card,.preview-box{background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);backdrop-filter:blur(20px)}
+    .hero-card{border-radius:32px;padding:34px;position:relative;overflow:hidden}
+    .hero-card::before{
+      content:"";position:absolute;inset:auto -60px -70px auto;width:210px;height:210px;border-radius:50%;
+      background:radial-gradient(circle, rgba(69,216,255,.25), transparent 65%);
+      filter:blur(4px);
+    }
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(78,134,255,.12);border:1px solid rgba(78,134,255,.28);color:#cfe1ff;border-radius:999px;padding:9px 14px;font-weight:800;font-size:.8rem;letter-spacing:.2px}
+    .hero h1{font-size:clamp(2rem,4vw,4rem);line-height:1.02;margin:18px 0 14px;max-width:12ch}
+    .gradient-text{background:linear-gradient(90deg,#f8fbff 0%,#8fdfff 38%,#75a7ff 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .hero p{color:#bfd0e9;font-size:1.04rem;line-height:1.75;max-width:60ch;margin:0 0 22px}
+    .hero-buttons,.actions{display:flex;flex-wrap:wrap;gap:12px}
+    .btn{
+      appearance:none;border:0;border-radius:16px;padding:15px 20px;font:inherit;font-weight:800;color:white;cursor:pointer;
+      transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease, background .18s ease;
+      text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      box-shadow:0 10px 0 rgba(0,0,0,.18), 0 20px 35px rgba(0,0,0,.18);
+      transform:translateY(0);
+    }
+    .btn:hover{transform:translateY(-2px);box-shadow:0 12px 0 rgba(0,0,0,.18), 0 22px 38px rgba(0,0,0,.22)}
+    .btn:active{transform:translateY(4px);box-shadow:0 6px 0 rgba(0,0,0,.18), 0 10px 24px rgba(0,0,0,.15)}
+    .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:0 8px 0 rgba(0,0,0,.16)}
+    .btn-primary{background:linear-gradient(180deg,#5f91ff,#255eff)}
+    .btn-secondary{background:linear-gradient(180deg,#182b51,#11203c);border:1px solid rgba(255,255,255,.08)}
+    .btn-ghost{background:linear-gradient(180deg,#173763,#112544);border:1px solid rgba(120,161,255,.2)}
+    .hero-metrics{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:12px;margin-top:22px}
+    .metric{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:16px;border-radius:18px}
+    .metric b{display:block;font-size:1.25rem;margin-bottom:4px}
+    .metric span{color:var(--muted);font-size:.87rem;line-height:1.4}
+    .mini-grid{display:grid;grid-template-rows:repeat(3,1fr);gap:16px}
+    .mini-panel{border-radius:28px;padding:20px;display:flex;flex-direction:column;justify-content:space-between;min-height:160px}
+    .mini-panel h3{margin:0 0 10px;font-size:1rem}
+    .mini-panel p{margin:0;color:var(--muted);line-height:1.6;font-size:.95rem}
+    .mini-panel .icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin-bottom:12px;background:linear-gradient(135deg, rgba(78,134,255,.28), rgba(69,216,255,.22));font-size:22px}
+    .workflow{padding:10px 0 8px}
+    .section-head{display:flex;align-items:end;justify-content:space-between;gap:14px;margin-bottom:16px}
+    .section-head h2{font-size:1.75rem;margin:0}
+    .section-head p{color:var(--muted);margin:0;max-width:720px;line-height:1.7}
+    .workflow-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+    .workflow-card{border-radius:24px;padding:22px;position:relative;overflow:hidden}
+    .workflow-card .num{position:absolute;right:16px;top:14px;color:rgba(255,255,255,.1);font-size:2.5rem;font-weight:900}
+    .workflow-card h3{margin:14px 0 8px;font-size:1.03rem}
+    .workflow-card p{margin:0;color:var(--muted);line-height:1.6;font-size:.94rem}
+    .workflow-card .w-icon{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+    .stepbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}
+    .step-pill{padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);font-size:.86rem;font-weight:800;color:#c3d6ef}
+    .step-pill.active{background:linear-gradient(180deg, rgba(95,145,255,.26), rgba(27,92,255,.14));border-color:rgba(95,145,255,.35);color:#fff}
+    .stage{border-radius:30px;padding:26px;margin:18px 0}
+    .stage-head{display:flex;gap:18px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+    .stage-head h3{margin:0;font-size:1.45rem}
+    .stage-head p{margin:6px 0 0;color:var(--muted);line-height:1.65;max-width:720px}
+    .upload-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:18px}
+    .dropzone{
+      min-height:320px;border-radius:28px;border:1.6px dashed rgba(143,223,255,.28);
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+      display:flex;align-items:center;justify-content:center;text-align:center;padding:26px;cursor:pointer;position:relative;overflow:hidden;
+    }
+    .dropzone::before{content:"";position:absolute;inset:-1px;background:radial-gradient(circle at top right, rgba(69,216,255,.12), transparent 28%), radial-gradient(circle at bottom left, rgba(78,134,255,.14), transparent 26%);pointer-events:none}
+    .dropzone input{display:none}
+    .drop-content{position:relative;z-index:1;max-width:420px}
+    .drop-emoji{width:72px;height:72px;border-radius:24px;margin:0 auto 18px;display:grid;place-items:center;font-size:32px;background:linear-gradient(180deg,#173663,#102343);box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 18px 30px rgba(0,0,0,.18)}
+    .dropzone strong{display:block;font-size:1.38rem;margin-bottom:10px}
+    .dropzone span{display:block;color:var(--muted);line-height:1.65}
+    .preview-box{border-radius:28px;padding:18px;display:flex;flex-direction:column;gap:14px;justify-content:space-between}
+    .preview-frame{background:#07111d;border-radius:20px;min-height:220px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.06);overflow:hidden}
+    .preview-frame img{max-height:300px;width:auto;border-radius:12px}
+    .preview-placeholder{color:#6f88aa;font-size:.95rem;text-align:center;padding:22px;line-height:1.7}
+    .preview-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .mini-stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:18px;padding:14px}
+    .mini-stat b{display:block;font-size:1rem;margin-bottom:4px}
+    .mini-stat span{color:var(--muted);font-size:.86rem}
+    .status{margin-top:12px;min-height:24px;color:#dbe9ff}
+    .status .error-box,.error-box{background:rgba(255,124,136,.12);border:1px solid rgba(255,124,136,.28);padding:14px;border-radius:16px;color:#ffd4d8}
+    .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:16px}
+    .summary-card{border-radius:20px;padding:16px}
+    .summary-card b{display:block;font-size:1.35rem;margin-bottom:6px}
+    .summary-card span{display:block;color:var(--muted);font-size:.88rem;line-height:1.5}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .field{margin-bottom:14px}
+    .field label{display:block;margin:0 0 8px;color:#bfd0ea;font-weight:800;font-size:.88rem;letter-spacing:.2px}
+    .input, textarea{
+      width:100%;border:1px solid rgba(255,255,255,.09);background:rgba(4,10,22,.38);color:var(--text);
+      border-radius:16px;padding:14px 15px;font:inherit;outline:none;transition:border-color .18s ease, box-shadow .18s ease;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+    }
+    textarea{resize:vertical;min-height:90px}
+    .input:focus, textarea:focus{border-color:rgba(95,145,255,.55);box-shadow:0 0 0 4px rgba(95,145,255,.12)}
+    .tx-list{display:grid;gap:14px}
+    .tx-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:18px}
+    .tx-top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+    .tx-title{font-weight:900;letter-spacing:.2px}
+    .badge{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.06);font-size:.78rem;font-weight:800;color:#dce8ff}
+    .badge.warn{background:rgba(255,202,106,.12);color:#ffe5ac;border:1px solid rgba(255,202,106,.22)}
+    .alerts{display:grid;gap:12px;margin-top:14px}
+    .alert{background:rgba(255,202,106,.10);border:1px solid rgba(255,202,106,.28);padding:14px 15px;border-radius:16px;color:#ffe6b5;line-height:1.6}
+    .result-shell{border-radius:30px;padding:26px}
+    .result-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px}
+    .result-title p{margin:8px 0 0;color:var(--muted)}
+    .solution-area h3{font-size:1.3rem;margin:24px 0 12px}
+    .tablewrap{overflow:auto;border-radius:20px;border:1px solid rgba(255,255,255,.08)}
+    table{width:100%;border-collapse:collapse;min-width:680px;background:rgba(7,17,31,.38)}
+    th,td{padding:14px 15px;border-bottom:1px solid rgba(255,255,255,.07);border-right:1px solid rgba(255,255,255,.05);text-align:left;vertical-align:top}
+    th:last-child,td:last-child{border-right:none}
+    th{background:rgba(95,145,255,.10);font-size:.9rem}
+    td{color:#e7f1ff;font-size:.95rem}
+    td.num{text-align:right;font-variant-numeric:tabular-nums}
+    .account-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+    .account{
+      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:18px;
+      box-shadow:0 12px 24px rgba(0,0,0,.15);
+    }
+    .account h4{text-align:center;margin:0 0 14px;font-size:1.06rem}
+    .account .sides{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .account .side-col{min-height:90px}
+    .account .side-col:first-child{border-right:1px solid rgba(255,255,255,.08);padding-right:12px}
+    .account .side-col:last-child{padding-left:12px}
+    .account small{display:block;margin:7px 0;color:#cfe0f8;line-height:1.45}
+    .divider{height:1px;background:rgba(255,255,255,.07);margin:14px 0}
+    .notes{display:grid;gap:12px;margin-top:16px}
+    .note{background:rgba(78,134,255,.11);border:1px solid rgba(78,134,255,.24);padding:14px 15px;border-radius:16px;color:#d7e7ff;line-height:1.6}
+    .footer{padding:22px 0 0;text-align:center;color:#8da3c2}
+    .footer b{color:#eaf3ff}
+    .hidden{display:none !important}
+
+    @media (max-width:1080px){
+      .hero,.upload-grid{grid-template-columns:1fr}
+      .workflow-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .mini-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:none}
+    }
+    @media (max-width:760px){
+      .hero{padding-top:24px}
+      .hero-card,.stage,.result-shell{padding:20px}
+      .workflow-grid,.summary-grid,.form-grid,.preview-meta,.hero-metrics,.mini-grid{grid-template-columns:1fr}
+      .topbar-inner{padding:12px 14px}
+      .shell{padding:0 14px 32px}
+      .brand-text span{display:none}
+      .hero h1{max-width:none}
+      .dropzone{min-height:260px}
+      table{min-width:560px}
+    }
+    @media print{
+      body{background:white;color:black}
+      .topbar,.hero,.workflow,#uploadPanel,#confirmPanel,.result-actions,.stepbar{display:none!important}
+      .result-shell,.solution-area,.tablewrap,.account,.note,.alert{background:white!important;color:black!important;border-color:#cbd5e1!important;box-shadow:none!important}
+      th{background:#eef2ff!important;color:black!important}
+      td,th{color:black!important}
+      .shell{max-width:none;padding:0}
+      .footer{color:#555}
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo">L</div>
+        <div class="brand-text">
+          <b>LedgerLens AI</b>
+          <span>Professional Accounting Question Solver</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="pill live">AI Solver Ready</div>
+        <div class="pill">Journal · T-Accounts · Trial Balance</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">✦ Upload image → Confirm values → Get complete answer</div>
+        <h1><span class="gradient-text">Solve accounting questions</span> in a smarter way.</h1>
+        <p>
+          Apni accounting question ki picture upload karo. AI poora question read karega, dates aur amounts confirm karwayega,
+          phir tumhe complete professional answer dega — General Journal, T-Accounts, Trial Balance aur useful notes ke saath.
+        </p>
+        <div class="hero-buttons">
+          <a href="#uploadPanel" class="btn btn-primary">Start Solving Now</a>
+          <a href="#workflow" class="btn btn-secondary">See How It Works</a>
+        </div>
+        <div class="hero-metrics">
+          <div class="metric"><b>Step 1</b><span>Photo upload with mobile or desktop.</span></div>
+          <div class="metric"><b>Step 2</b><span>AI extracts dates, values, names and tasks.</span></div>
+          <div class="metric"><b>Step 3</b><span>Final solution with balances and explanations.</span></div>
+        </div>
+      </div>
+
+      <div class="mini-grid">
+        <div class="mini-panel">
+          <div>
+            <div class="icon">📘</div>
+            <h3>Smart Journal Builder</h3>
+            <p>Debit, credit, narration aur totals ko clean format mein generate karta hai.</p>
+          </div>
+        </div>
+        <div class="mini-panel">
+          <div>
+            <div class="icon">📊</div>
+            <h3>T-Accounts & Trial Balance</h3>
+            <p>Ledger style result jo exam practice aur revision dono ke liye useful ho.</p>
+          </div>
+        </div>
+        <div class="mini-panel">
+          <div>
+            <div class="icon">🛡️</div>
+            <h3>Confirm Before Solve</h3>
+            <p>AI pe andha trust nahi — pehle question verify, phir final answer.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workflow" id="workflow">
+      <div class="section-head">
+        <div>
+          <h2>How LedgerLens works</h2>
+          <p>Ye dashboard student-friendly hai, lekin result presentation professional rakhta hai. Har step clearly visible hai taake user confuse na ho.</p>
+        </div>
+      </div>
+      <div class="workflow-grid">
+        <div class="workflow-card">
+          <div class="num">1</div>
+          <div class="w-icon">📷</div>
+          <h3>Upload the question</h3>
+          <p>Notebook, book ya paper ka accounting question image upload karo.</p>
+        </div>
+        <div class="workflow-card">
+          <div class="num">2</div>
+          <div class="w-icon">🧠</div>
+          <h3>AI reads everything</h3>
+          <p>Business name, dates, values, parties aur required tasks extract kiye jaate hain.</p>
+        </div>
+        <div class="workflow-card">
+          <div class="num">3</div>
+          <div class="w-icon">✅</div>
+          <h3>Confirm the extracted data</h3>
+          <p>User ko clean review screen milti hai jahan correction bhi ki ja sakti hai.</p>
+        </div>
+        <div class="workflow-card">
+          <div class="num">4</div>
+          <div class="w-icon">✨</div>
+          <h3>Generate final answer</h3>
+          <p>Professional output with complete journal, T-accounts, trial balance and notes.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="stepbar">
+      <span id="s1" class="step-pill active">1 · Upload Question</span>
+      <span id="s2" class="step-pill">2 · Confirm Extracted Data</span>
+      <span id="s3" class="step-pill">3 · View Final Solution</span>
+    </div>
+
+    <section class="stage" id="uploadPanel">
+      <div class="stage-head">
+        <div>
+          <h3>Upload your accounting question</h3>
+          <p>Best result ke liye clear image upload karo. AI poora question read karega aur tumhe values verify karne ke liye clean review dega.</p>
+        </div>
+        <div class="pill">JPG · PNG · WebP · up to 8MB</div>
+      </div>
+
+      <div class="upload-grid">
+        <label class="dropzone">
+          <input id="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" />
+          <div class="drop-content">
+            <div class="drop-emoji">📸</div>
+            <strong>Tap here to upload your question image</strong>
+            <span>Camera se photo lo ya gallery se select karo. Clear text hoga to analysis zyada accurate hoga.</span>
+          </div>
+        </label>
+
+        <div class="preview-box">
+          <div>
+            <div class="preview-frame" id="previewFrame">
+              <div class="preview-placeholder" id="previewPlaceholder">Abhi tak koi image select nahi hui.<br/>Upload ke baad yahan preview nazar aayegi.</div>
+              <img id="preview" class="hidden" alt="Uploaded question preview" />
+            </div>
+          </div>
+          <div class="preview-meta">
+            <div class="mini-stat"><b id="fileName">No file selected</b><span>Selected image file</span></div>
+            <div class="mini-stat"><b id="fileType">—</b><span>Detected format</span></div>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn btn-ghost" id="gallery">Choose from gallery</button>
+            <button type="button" class="btn btn-primary" id="analyze" disabled>Analyze Full Question →</button>
+          </div>
+          <div id="status" class="status" role="status"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stage hidden" id="confirmPanel">
+      <div class="stage-head">
+        <div>
+          <h3>Confirm the extracted question</h3>
+          <p>AI ne jo read kiya hai use achi tarah check kar lo. Agar date, amount, name ya description mein issue ho to yahin edit karke solve karo.</p>
+        </div>
+        <div class="pill status-ok">Verification step</div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card"><b id="sumTransactions">0</b><span>Transactions detected</span></div>
+        <div class="summary-card"><b id="sumRequirements">0</b><span>Required tasks found</span></div>
+        <div class="summary-card"><b id="sumWarnings">0</b><span>Warnings to review</span></div>
+        <div class="summary-card"><b id="sumValues">0</b><span>Amounts extracted</span></div>
+      </div>
+
+      <div class="form-grid" style="margin-top:18px;">
+        <div class="field">
+          <label>Business / Person</label>
+          <input class="input" id="business" placeholder="e.g. Kainat Store / Mr. Rehmat" />
+        </div>
+        <div class="field">
+          <label>Period</label>
+          <input class="input" id="period" placeholder="e.g. For the month of March 2026" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Full question / heading</label>
+        <textarea id="question" placeholder="AI extracted full question text will appear here..."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Required tasks (one per line)</label>
+        <textarea id="requirements" placeholder="e.g. Record the transactions in General Journal"></textarea>
+      </div>
+
+      <h3 style="margin:8px 0 14px;">Transactions & values</h3>
+      <div class="tx-list" id="transactions"></div>
+      <div class="actions" style="margin-top:14px;">
+        <button class="btn btn-secondary" id="add" type="button">+ Add transaction</button>
+      </div>
+      <div id="warnings" class="alerts"></div>
+      <div class="actions" style="margin-top:18px;">
+        <button id="solve" class="btn btn-primary">Yes, this question is correct — Solve →</button>
+        <button class="btn btn-secondary" id="back">← Change photo</button>
+      </div>
+      <div id="solveStatus" class="status" role="status"></div>
+    </section>
+
+    <section class="result-shell hidden" id="resultPanel">
+      <div class="result-title">
+        <div>
+          <h2 style="margin:0;">Complete Accounting Solution</h2>
+          <p id="resultTitle">Your final answer will appear here.</p>
+        </div>
+        <div class="pill">Ready for print / PDF</div>
+      </div>
+      <div class="solution-area" id="solution"></div>
+      <div class="actions result-actions" style="margin-top:18px;">
+        <button class="btn btn-primary" onclick="window.print()">Print / Save PDF</button>
+        <button class="btn btn-secondary" id="new">Solve another question</button>
+      </div>
+    </section>
+
+    <footer class="footer">
+      Built for practical accounting help · <b>Made by AfhamAhmed</b>
+    </footer>
+  </main>
+
+  <script>
+    let extracted = null;
+    const $ = (id) => document.getElementById(id);
+    const money = (n) => Number(n || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 });
+    const safe = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function show(id) {
+      ['uploadPanel', 'confirmPanel', 'resultPanel'].forEach((x) => $(x).classList.toggle('hidden', x !== id));
+      ['s1', 's2', 's3'].forEach((x, i) => $(x).classList.toggle('active', ['uploadPanel', 'confirmPanel', 'resultPanel'][i] === id));
+      if (id === 'confirmPanel') document.getElementById('confirmPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (id === 'resultPanel') document.getElementById('resultPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function setStatus(id, message, isError = false) {
+      const el = $(id);
+      el.innerHTML = isError ? `<div class="error-box">${safe(message)}</div>` : message;
+    }
+
+    function updatePreview(file) {
+      if (!file) return;
+      $('fileName').textContent = file.name;
+      $('fileType').textContent = file.type || 'Unknown format';
+      $('preview').src = URL.createObjectURL(file);
+      $('preview').classList.remove('hidden');
+      $('previewPlaceholder').classList.add('hidden');
+    }
+
+    function countAmounts(transactions) {
+      return (transactions || []).reduce((acc, t) => acc + (Array.isArray(t.amounts) ? t.amounts.length : 0), 0);
+    }
+
+    function renderSummary() {
+      const tx = extracted?.transactions || [];
+      $('sumTransactions').textContent = tx.length;
+      $('sumRequirements').textContent = (extracted?.requirements || []).length;
+      $('sumWarnings').textContent = (extracted?.warnings || []).length;
+      $('sumValues').textContent = countAmounts(tx);
+    }
+
+    $('gallery').onclick = () => {
+      const x = $('photo');
+      x.removeAttribute('capture');
+      x.click();
+    };
+
+    $('photo').onchange = () => {
+      const f = $('photo').files[0];
+      $('analyze').disabled = !f;
+      if (f) {
+        updatePreview(f);
+        setStatus('status', 'Image selected. Ab Analyze Full Question dabao.', false);
+      }
+    };
+
+    async function api(url, body) {
+      const r = await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const j = await r.json();
+      if (!r.ok) throw Error(j.error || 'Request failed');
+      return j;
+    }
+
+    $('analyze').onclick = async () => {
+      const f = $('photo').files[0];
+      if (!f) return;
+      $('analyze').disabled = true;
+      setStatus('status', 'AI poora question read kar raha hai… dates, values, names aur tasks extract kiye ja rahe hain.', false);
+      try {
+        const encoded = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = () => reject(Error('Cannot read image file.'));
+          reader.readAsDataURL(f);
+        });
+        extracted = await api('/api/analyze', { image: encoded, mimeType: f.type });
+        $('business').value = extracted.business || '';
+        $('period').value = extracted.period || '';
+        $('question').value = extracted.question || '';
+        $('requirements').value = (extracted.requirements || []).join('\n');
+        renderTx();
+        renderSummary();
+        $('warnings').innerHTML = (extracted.warnings || []).map((x) => `<div class="alert">⚠ ${safe(x)}</div>`).join('');
+        show('confirmPanel');
+      } catch (e) {
+        setStatus('status', e.message, true);
+      } finally {
+        $('analyze').disabled = false;
+      }
+    };
+
+    function renderTx() {
+      const root = $('transactions');
+      root.innerHTML = '';
+      (extracted.transactions || []).forEach((t, i) => {
+        const d = document.createElement('div');
+        d.className = 'tx-card';
+        d.innerHTML = `
+          <div class="tx-top">
+            <div class="tx-title">Transaction ${i + 1}</div>
+            <div class="badge ${t.uncertain ? 'warn' : ''}">${t.uncertain ? 'Needs careful review' : 'Detected successfully'}</div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Date</label>
+              <input class="input" data-field="date" value="${safe(t.date)}" placeholder="e.g. Mar 01" />
+            </div>
+            <div class="field">
+              <label>Amounts (comma-separated)</label>
+              <input class="input" data-field="amounts" value="${safe((t.amounts || []).join(', '))}" placeholder="e.g. 15000, 4000" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Full transaction description</label>
+            <textarea data-field="description" placeholder="Transaction details...">${safe(t.description)}</textarea>
+          </div>
+          <div class="field">
+            <label>People / Businesses (comma-separated)</label>
+            <input class="input" data-field="parties" value="${safe((t.parties || []).join(', '))}" placeholder="e.g. Badar & Sons" />
+          </div>
+          <div class="actions">
+            <button class="btn btn-secondary remove" type="button">Remove transaction</button>
+          </div>`;
+        d.querySelector('.remove').onclick = () => {
+          readTx();
+          extracted.transactions.splice(i, 1);
+          renderTx();
+          renderSummary();
+        };
+        root.appendChild(d);
+      });
+    }
+
+    function readTx() {
+      extracted.transactions = [...$('transactions').children].map((d) => ({
+        date: d.querySelector('[data-field=date]').value,
+        description: d.querySelector('[data-field=description]').value,
+        amounts: d.querySelector('[data-field=amounts]').value.split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x) && x > 0),
+        parties: d.querySelector('[data-field=parties]').value.split(',').map((x) => x.trim()).filter(Boolean)
+      }));
+    }
+
+    $('add').onclick = () => {
+      readTx();
+      extracted.transactions.push({ date: '', description: '', amounts: [], parties: [] });
+      renderTx();
+      renderSummary();
+    };
+
+    $('back').onclick = () => show('uploadPanel');
+    $('new').onclick = () => location.reload();
+
+    $('solve').onclick = async () => {
+      readTx();
+      const data = {
+        business: $('business').value,
+        period: $('period').value,
+        question: $('question').value,
+        requirements: $('requirements').value.split('\n').filter(Boolean),
+        transactions: extracted.transactions
+      };
+      $('solve').disabled = true;
+      setStatus('solveStatus', 'Final solution generate ho raha hai… journal entries, ledger style T-accounts aur trial balance taiyar ki ja rahi hai.', false);
+      try {
+        const r = await api('/api/solve', data);
+        $('resultTitle').textContent = `${data.business || 'Accounting Solution'} · ${data.period || 'Verified Question'}`;
+        renderSolution(r);
+        show('resultPanel');
+      } catch (e) {
+        setStatus('solveStatus', e.message, true);
+      } finally {
+        $('solve').disabled = false;
+      }
+    };
+
+    function renderSolution(r) {
+      const entries = [
+        ...(r.journal || []).map((x) => ({
+          date: x.date,
+          lines: [
+            { account: x.debitAccount, debit: x.debit, credit: 0 },
+            { account: x.creditAccount, debit: 0, credit: x.credit }
+          ],
+          narration: x.narration,
+          explanation: x.explanation
+        })),
+        ...(r.extraEntries || [])
+      ];
+
+      let html = '<h3>General Journal</h3><div class="tablewrap"><table><tr><th>Date</th><th>Particulars / Narration</th><th>Debit (Rs.)</th><th>Credit (Rs.)</th></tr>';
+      let dr = 0, cr = 0;
+      for (const e of entries) {
+        (e.lines || []).forEach((l, i) => {
+          dr += Number(l.debit || 0);
+          cr += Number(l.credit || 0);
+          html += `<tr><td>${i ? '' : safe(e.date)}</td><td>${l.credit ? '&nbsp;&nbsp;To ' : ''}${safe(l.account)}</td><td class="num">${l.debit ? money(l.debit) : ''}</td><td class="num">${l.credit ? money(l.credit) : ''}</td></tr>`;
+        });
+        html += `<tr><td></td><td colspan="3"><i>${safe(e.narration || '')}</i>${e.explanation ? ' — ' + safe(e.explanation) : ''}</td></tr>`;
+      }
+      html += `<tr><th></th><th>Total</th><th class="num">${money(dr)}</th><th class="num">${money(cr)}</th></tr></table></div>`;
+      if (Math.abs(dr - cr) > .01) html += '<div class="alert">⚠ Journal debits and credits do not balance. Please review before final use.</div>';
+
+      html += '<h3>T-Accounts</h3><div class="account-grid">';
+      for (const t of r.tAccounts || []) {
+        html += `<div class="account"><h4>${safe(t.account)}</h4><div class="sides"><div class="side-col"><b>Dr.</b>${(t.debits || []).map((x) => `<small>${safe(x.date)} · ${money(x.amount)}</small>`).join('')}</div><div class="side-col"><b>Cr.</b>${(t.credits || []).map((x) => `<small>${safe(x.date)} · ${money(x.amount)}</small>`).join('')}</div></div><div class="divider"></div><small><b>Balance:</b> ${money(t.balance)} ${safe(t.side || '')}</small></div>`;
+      }
+      html += '</div>';
+
+      html += '<h3>Trial Balance</h3><div class="tablewrap"><table><tr><th>Account</th><th>Debit (Rs.)</th><th>Credit (Rs.)</th></tr>';
+      let td = 0, tc = 0;
+      for (const t of r.trialBalance || []) {
+        td += Number(t.debit || 0);
+        tc += Number(t.credit || 0);
+        html += `<tr><td>${safe(t.account)}</td><td class="num">${t.debit ? money(t.debit) : ''}</td><td class="num">${t.credit ? money(t.credit) : ''}</td></tr>`;
+      }
+      html += `<tr><th>Total</th><th class="num">${money(td)}</th><th class="num">${money(tc)}</th></tr></table></div>`;
+      if (Math.abs(td - tc) > .01) html += '<div class="alert">⚠ Trial balance mismatch detected. Recheck the question or assumptions.</div>';
+
+      const notes = [...(r.notes || []), ...(r.warnings || [])];
+      if (notes.length) {
+        html += '<div class="notes">';
+        for (const n of notes) html += `<div class="note">${safe(n)}</div>`;
+        html += '</div>';
+      }
+      $('solution').innerHTML = html;
+    }
+  </script>
+</body>
+</html>
